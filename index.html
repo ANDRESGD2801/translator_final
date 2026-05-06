@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EN → FR Translator · Qwen2</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0f14; --surface: #141720; --border: rgba(255,255,255,0.07);
+      --accent: #4f8fff; --accent2: #c5a3ff; --text: #e8eaf0; --muted: #7a7f8e;
+      --success: #4ade80; --radius: 14px;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; padding: 3rem 1rem 4rem;
+    }
+    header { text-align: center; margin-bottom: 2.8rem; }
+    .badge {
+      display: inline-block; font-family: 'DM Mono', monospace;
+      font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--accent2); border: 1px solid rgba(197,163,255,.25);
+      border-radius: 99px; padding: 4px 14px; margin-bottom: 1rem;
+    }
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.1;
+      background: linear-gradient(135deg, #e8eaf0 30%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .subtitle { margin-top: .6rem; font-size: 14px; color: var(--muted); }
+
+    /* Loading overlay */
+    #loadingOverlay {
+      position: fixed; inset: 0; background: rgba(13,15,20,.97);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; z-index: 100; gap: 1.5rem;
+    }
+    #loadingOverlay h2 {
+      font-family: 'DM Serif Display', serif; font-size: 1.6rem;
+      background: linear-gradient(135deg, #e8eaf0 30%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .progress-wrap {
+      width: 340px; background: rgba(255,255,255,.07);
+      border-radius: 99px; height: 6px; overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%; width: 0%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width .3s ease;
+    }
+    #loadingMsg { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: center; max-width: 340px; }
+
+    /* Card */
+    .card {
+      width: 100%; max-width: 760px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+    }
+    .lang-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .9rem 1.4rem; border-bottom: 1px solid var(--border);
+      font-size: 13px; font-family: 'DM Mono', monospace;
+    }
+    .lang-tag { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-en { background: var(--accent); } .dot-fr { background: var(--accent2); }
+    .arrow-icon { color: var(--muted); font-size: 18px; }
+    .panes { display: grid; grid-template-columns: 1fr 1px 1fr; }
+    @media (max-width: 560px) { .panes { grid-template-columns: 1fr; } .divider { display: none; } }
+    .divider { background: var(--border); }
+    .pane { display: flex; flex-direction: column; padding: 1.2rem 1.4rem 1rem; min-height: 180px; }
+    .pane-label {
+      font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: .7rem; font-family: 'DM Mono', monospace;
+    }
+    textarea {
+      flex: 1; background: transparent; border: none; outline: none;
+      resize: none; color: var(--text); font-family: 'Inter', sans-serif;
+      font-size: 16px; line-height: 1.65; min-height: 120px;
+    }
+    textarea::placeholder { color: var(--muted); }
+    .result-text {
+      flex: 1; font-family: 'DM Serif Display', serif;
+      font-size: 18px; line-height: 1.65; color: var(--accent2); min-height: 120px;
+    }
+    .result-placeholder { color: rgba(197,163,255,.25); font-style: italic; }
+    .bottom-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .85rem 1.4rem; border-top: 1px solid var(--border);
+      gap: 12px; flex-wrap: wrap;
+    }
+    .examples { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      background: rgba(79,143,255,.08); border: 1px solid rgba(79,143,255,.2);
+      color: var(--accent); font-size: 12px; padding: 4px 12px;
+      border-radius: 99px; cursor: pointer;
+      transition: background .15s, border-color .15s; font-family: 'Inter', sans-serif;
+    }
+    .chip:hover { background: rgba(79,143,255,.18); border-color: rgba(79,143,255,.45); }
+    .btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
+      padding: 10px 24px; font-size: 14px; font-weight: 500; cursor: pointer;
+      font-family: 'Inter', sans-serif; display: flex; align-items: center;
+      gap: 8px; transition: opacity .15s, transform .1s; white-space: nowrap;
+    }
+    .btn:hover { opacity: .85; } .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: default; }
+    .spinner {
+      width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin .7s linear infinite; display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .status-bar {
+      text-align: center; font-size: 12px; color: var(--muted);
+      padding: .6rem 1.4rem .2rem; font-family: 'DM Mono', monospace;
+      min-height: 28px; letter-spacing: .04em;
+    }
+    .status-bar.error { color: #f87171; } .status-bar.ok { color: var(--success); }
+    footer { margin-top: 2rem; font-size: 12px; color: var(--muted); text-align: center; font-family: 'DM Mono', monospace; }
+  </style>
+</head>
+<body>
+
+  <div id="loadingOverlay">
+    <h2>Cargando modelo…</h2>
+    <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div id="loadingMsg">Necesitas conexión a internet la primera vez (~80 MB)</div>
+  </div>
+
+  <header>
+    <div class="badge">opus-mt-en-fr · Transformers.js · Sin Python</div>
+    <h1>English → French</h1>
+    <p class="subtitle">Corre 100% en tu navegador — sin Python, sin API keys</p>
+  </header>
+
+  <div class="card">
+    <div class="lang-bar">
+      <span class="lang-tag"><span class="dot dot-en"></span>English</span>
+      <span class="arrow-icon">→</span>
+      <span class="lang-tag"><span class="dot dot-fr"></span>Français</span>
+    </div>
+    <div class="panes">
+      <div class="pane">
+        <div class="pane-label">Input — English</div>
+        <textarea id="inputText" placeholder="Type or choose an example…" rows="5"></textarea>
+      </div>
+      <div class="divider"></div>
+      <div class="pane">
+        <div class="pane-label">Output — French</div>
+        <div class="result-text" id="resultText">
+          <span class="result-placeholder">Translation will appear here</span>
+        </div>
+      </div>
+    </div>
+    <div class="status-bar" id="statusBar"></div>
+    <div class="bottom-bar">
+      <div class="examples">
+        <button class="chip" onclick="setExample('I like soccer')">I like soccer</button>
+        <button class="chip" onclick="setExample('How are you?')">How are you?</button>
+        <button class="chip" onclick="setExample('What time is it?')">What time is it?</button>
+      </div>
+      <button class="btn" id="translateBtn" onclick="doTranslate()">
+        <span class="spinner" id="spinner"></span>
+        <span id="btnLabel">Translate</span>
+      </button>
+    </div>
+  </div>
+
+  <footer id="footerNote">cargando modelo…</footer>
+
+  <script type="module">
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.1/dist/transformers.min.js';
+
+    env.allowLocalModels = false;
+
+    let translator = null;
+
+    async function loadModel() {
+      const overlay = document.getElementById('loadingOverlay');
+      const bar     = document.getElementById('progressBar');
+      const msg     = document.getElementById('loadingMsg');
+
+      try {
+        translator = await pipeline(
+          'translation_en_to_fr',
+          'Xenova/opus-mt-en-fr',
+          {
+            progress_callback: (info) => {
+              if (info.status === 'progress' && info.progress != null) {
+                const pct = Math.round(info.progress);
+                bar.style.width = pct + '%';
+                msg.textContent = `Descargando… ${pct}%  (${info.file ?? ''})`;
+              }
+              if (info.status === 'ready') {
+                bar.style.width = '100%';
+                msg.textContent = '¡Listo!';
+              }
+            }
+          }
+        );
+        overlay.style.display = 'none';
+        document.getElementById('footerNote').textContent =
+          'Xenova/opus-mt-en-fr · Transformers.js · 100% en tu navegador';
+      } catch (err) {
+        msg.textContent = '✗ Error: ' + err.message;
+        bar.style.background = '#f87171';
+      }
+    }
+
+    window.doTranslate = async function () {
+      if (!translator) return;
+      const text = document.getElementById('inputText').value.trim();
+      if (!text) return;
+
+      const btn    = document.getElementById('translateBtn');
+      const label  = document.getElementById('btnLabel');
+      const spin   = document.getElementById('spinner');
+      const result = document.getElementById('resultText');
+      const status = document.getElementById('statusBar');
+
+      btn.disabled = true; label.textContent = 'Translating…';
+      spin.style.display = 'block';
+      result.innerHTML = '<span class="result-placeholder">Thinking…</span>';
+      status.textContent = ''; status.className = 'status-bar';
+
+      try {
+        const out = await translator(text, { max_new_tokens: 128 });
+        result.textContent = out[0].translation_text;
+        status.textContent = '✓ Done'; status.className = 'status-bar ok';
+      } catch (err) {
+        result.innerHTML = '<span class="result-placeholder">—</span>';
+        status.textContent = '✗ ' + err.message; status.className = 'status-bar error';
+      } finally {
+        btn.disabled = false; label.textContent = 'Translate';
+        spin.style.display = 'none';
+      }
+    };
+
+    window.setExample = function (text) {
+      document.getElementById('inputText').value = text;
+      document.getElementById('resultText').innerHTML =
+        '<span class="result-placeholder">Translation will appear here</span>';
+      document.getElementById('statusBar').textContent = '';
+      document.getElementById('statusBar').className = 'status-bar';
+    };
+
+    document.getElementById('inputText').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') window.doTranslate();
+    });
+
+    loadModel();
+  </script>
+</body>
+</html>
